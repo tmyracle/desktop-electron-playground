@@ -6,10 +6,19 @@ const BrowserWindow = electron.BrowserWindow
 
 const path = require('path')
 const url = require('url')
+const fileWatcher = require('chokidar')
+
+const dialog = electron.dialog
 
 // Keep a global reference of the window object, if you don't, the window will
 // be closed automatically when the JavaScript object is garbage collected.
 let mainWindow
+
+function selectDirectory() {
+  dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
+  })
+}
 
 function createWindow () {
   // Create the browser window.
@@ -23,7 +32,7 @@ function createWindow () {
   }))
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools()
+  // mainWindow.webContents.openDevTools()
 
   // Emitted when the window is closed.
   mainWindow.on('closed', function () {
@@ -55,6 +64,62 @@ app.on('activate', function () {
     createWindow()
   }
 })
+
+exports.selectDirectory = function () {
+  dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
+  },function(dirPath){
+    if(dirPath){
+        // Start to watch the selected path
+        function startWatcher(dirPath) {
+          var watcher = fileWatcher.watch(dirPath, {
+            ignored: /[\///]\./,
+            persistent: true
+          })
+
+          function onWatcherReady() {
+            console.info('Now watching for changes')
+          }
+
+          watcher.on('add', function(filePath) {
+            var str = filePath;
+            var n = str.lastIndexOf('/');
+            var fileName = str.substring(n + 1);
+            if (fileName.includes('AFE')) {
+              console.log('The AFE file: ', path, 'has been added.')
+              fileWindow = new BrowserWindow({width: 600, height: 400})
+              fileWindow.loadURL(url.format({
+                pathname: path.join(__dirname, 'new_file.html'),
+                protocol: 'file:',
+                slashes: true
+              }))
+
+              fileWindow.on('closed', function () {
+                // Dereference the window object, usually you would store windows
+                // in an array if your app supports multi windows, this is the time
+                // when you should delete the corresponding element.
+                fileWindow = null
+              })
+            } else {
+              console.log('File', path, 'has been added to directory')
+            }
+          })
+          .on('ready', onWatcherReady)
+          .on('raw', function (event, path, details) {
+            console.log('Raw event info', event, path, details);
+          })
+          .on('error', function (error) {
+            console.log('Oops there was an error', error);
+          })
+        };
+
+        startWatcher(dirPath[0]);
+    } else {
+        console.log("No path selected");
+    }
+  });
+}
+
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and require them here.
